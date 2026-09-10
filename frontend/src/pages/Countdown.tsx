@@ -1,4 +1,8 @@
 import { useEffect, useMemo, useState } from "react"
+import { countdownDays } from "../lib/scheduling"
+import StudioHeader from "../components/StudioHeader"
+import "../studios.css"
+import "../tracking.css"
 
 type CountdownItem = {
   id: string
@@ -19,13 +23,11 @@ function loadItems(): CountdownItem[] {
 }
 function saveItems(items: CountdownItem[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
+  window.dispatchEvent(new Event("chroninotes:countdowns-changed"))
 }
 
 function daysUntil(dateStr: string): number {
-  const now = new Date()
-  const todayMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-  const targetMs = new Date(dateStr + "T00:00:00").getTime()
-  return Math.ceil((targetMs - todayMs) / 86400000)
+  return countdownDays(dateStr)
 }
 
 function formatDateFull(dateStr: string): string {
@@ -50,7 +52,7 @@ export default function Countdown() {
   const [newNotes, setNewNotes] = useState("")
   const [editId, setEditId] = useState<string | null>(null)
   const [filter, setFilter] = useState<"all" | "upcoming" | "past">("all")
-  const [, setTick] = useState(0)
+  const [tick, setTick] = useState(0)
 
   // Live-refresh every minute
   useEffect(() => {
@@ -105,7 +107,7 @@ export default function Countdown() {
     if (filter === "upcoming") filtered = filtered.filter(it => daysUntil(it.date) >= 0)
     if (filter === "past") filtered = filtered.filter(it => daysUntil(it.date) < 0)
     return filtered.sort((a, b) => daysUntil(a.date) - daysUntil(b.date))
-  }, [items, filter])
+  }, [items, filter, tick])
 
   const upcomingCount = items.filter(it => daysUntil(it.date) >= 0).length
   const pastCount = items.filter(it => daysUntil(it.date) < 0).length
@@ -116,7 +118,9 @@ export default function Countdown() {
     .sort((a, b) => daysUntil(a.date) - daysUntil(b.date))[0]
 
   return (
-    <div style={{ height: "100%", color: "var(--text-primary)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div className="tracking-page" style={{ height: "100%", color: "var(--text-primary)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <StudioHeader eyebrow="LOOK FORWARD" title="Keep meaningful moments close." description="Days are counted by your local calendar, not by elapsed hours."
+        stats={[{ label: "Upcoming", value: upcomingCount }, { label: "Past", value: pastCount }]} />
 
       {/* Header */}
       <div style={{
@@ -320,7 +324,7 @@ export default function Countdown() {
             <div style={{ fontSize: "11px" }}>Create an event to start counting down</div>
           </div>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "10px" }}>
+          <div className="tracking-countdown-grid">
             {sorted.map(item => (
               <CountdownCard
                 key={item.id}
@@ -355,7 +359,7 @@ function CountdownCard({ item, onEdit, onDelete }: {
   const ringProgress = showRing ? Math.max(0, 1 - days / 30) : 0
 
   return (
-    <div
+    <div className="tracking-countdown-card"
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{

@@ -1,5 +1,8 @@
 import { useEffect, useState, useRef } from "react"
 import { useTimerStore } from "../store/timer.store"
+import StudioHeader from "../components/StudioHeader"
+import "../studios.css"
+import "../tracking.css"
 
 /* ════════════════════════════════════
    ANIMATED DIGIT
@@ -18,7 +21,7 @@ function AnimDigit({ value }: { value: string }) {
   }, [value])
 
   return (
-    <span style={{
+    <span className="tracking-timer-digit" style={{
       display: "inline-block",
       transition: "transform 0.18s cubic-bezier(0.34,1.56,0.64,1), opacity 0.18s ease",
       transform: flip ? "translateY(-3px) scale(1.06)" : "translateY(0) scale(1)",
@@ -184,7 +187,7 @@ function ActionBtn({ label, icon, variant = "primary", onClick, disabled }: {
   }
 
   return (
-    <button
+    <button className="tracking-timer-action"
       onClick={onClick}
       disabled={disabled}
       style={{
@@ -295,10 +298,12 @@ export default function Timer() {
      RENDER
   ══════════════════════════════════ */
   return (
-    <div style={{
+    <div className="tracking-page" style={{
       height: "100%", color: "var(--text-primary)",
       display: "flex", flexDirection: "column", overflow: "hidden",
     }}>
+      <StudioHeader eyebrow="FOCUS STUDIO" title="One thing. Your full attention." description="Find your flow, then make room to recharge."
+        stats={[{ label: "Focus minutes", value: workMinutes }, { label: "Break minutes", value: breakMinutes }]} />
       {/* ── Header bar ── */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -324,7 +329,7 @@ export default function Timer() {
           background: "var(--glass-bg)", border: "1px solid var(--glass-border)",
         }}>
           {(["pomodoro", "timer", "stopwatch"] as const).map(t => (
-            <button key={t} onClick={() => setTool(t)} style={{
+            <button key={t} onClick={() => setTool(t)} aria-pressed={tool === t} disabled={isRunning || isPaused} title={isRunning || isPaused ? "Stop the current session before changing tools" : undefined} style={{
               display: "flex", alignItems: "center", gap: "5px",
               padding: "5px 14px", borderRadius: "var(--radius-sm)",
               fontSize: "11px", fontWeight: 600,
@@ -342,12 +347,12 @@ export default function Timer() {
       </div>
 
       {/* ── Main two-column body ── */}
-      <div style={{
+      <div className="tracking-timer-body" style={{
         flex: 1, display: "flex", minHeight: 0, overflow: "hidden",
       }}>
 
         {/* ─── LEFT: Ring + Timer display ─── */}
-        <div style={{
+        <div className="tracking-timer-stage" style={{
           flex: 1, display: "flex", flexDirection: "column",
           alignItems: "center", justifyContent: "center",
           padding: "24px", position: "relative",
@@ -380,7 +385,7 @@ export default function Timer() {
           </div>
 
           {/* ── Circular ring with digits inside ── */}
-          <div style={{
+          <div className="tracking-timer-dial" style={{
             position: "relative",
             width: `${RING_SIZE}px`, height: `${RING_SIZE}px`,
             marginBottom: "24px",

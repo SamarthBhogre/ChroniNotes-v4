@@ -1,6 +1,7 @@
 import { create } from "zustand"
 import { playTimerComplete, playBreakStart } from "../lib/sounds"
 import { useUserStore } from "./user.store"
+import { remainingSeconds } from "../lib/scheduling"
 
 type Mode = "work" | "break" | "stopwatch" | "timer"
 
@@ -36,7 +37,10 @@ export const useTimerStore = create<TimerState>((set, get) => ({
   breakMinutes:  5,
   customMinutes: 10,   // ← NEW: default 10 min
 
-  setTool: (tool) => set({ tool, mode: tool === "timer" ? "timer" : tool === "stopwatch" ? "stopwatch" : "work" }),
+  setTool: (tool) => {
+    if (get().isRunning || get().isPaused) return
+    set({ tool, seconds: 0, mode: tool === "timer" ? "timer" : tool === "stopwatch" ? "stopwatch" : "work" })
+  },
 
   setCustom: (minutes) => set({ customMinutes: minutes }),   // ← NEW
 
@@ -118,10 +122,12 @@ export const useTimerStore = create<TimerState>((set, get) => ({
    CLIENT-SIDE TIMER (no backend)
 ═══════════════════════════════════ */
 let clientTimerInterval: ReturnType<typeof setInterval> | null = null
+let clientDeadline = 0
 
 function startClientTimer() {
   if (clientTimerInterval) return
-  
+  clientDeadline = Date.now() + useTimerStore.getState().seconds * 1000
+
   clientTimerInterval = setInterval(() => {
     const state = useTimerStore.getState()
     
@@ -130,7 +136,7 @@ function startClientTimer() {
       return
     }
     
-    const newSeconds = Math.max(0, state.seconds - 1)
+    const newSeconds = remainingSeconds(clientDeadline, Date.now())
     useTimerStore.setState({ seconds: newSeconds })
     
     // Auto-stop when timer reaches 0

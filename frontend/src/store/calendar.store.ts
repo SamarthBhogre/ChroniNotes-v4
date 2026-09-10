@@ -1,4 +1,7 @@
 import { create } from "zustand"
+import { localDate, moveCalendarDate } from "../lib/scheduling"
+
+let eventsRequest = 0
 
 export type EventType = "event" | "reminder" | "focus" | "task"
 
@@ -65,26 +68,18 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
   currentDate: new Date(),
   selectedDate: todayStr(),
   setCurrentDate: (d) => set({ currentDate: d }),
-  setSelectedDate: (d) => set({ selectedDate: d }),
+  setSelectedDate: (d) => set({ selectedDate: d, currentDate: new Date(`${d}T12:00:00`) }),
 
   goToPrev: () => {
     const { view, currentDate } = get()
-    const d = new Date(currentDate)
-    if      (view === "month")  d.setMonth(d.getMonth() - 1)
-    else if (view === "week")   d.setDate(d.getDate() - 7)
-    else if (view === "day")    d.setDate(d.getDate() - 1)
-    else if (view === "agenda") d.setMonth(d.getMonth() - 1)
-    set({ currentDate: d })
+    const d = moveCalendarDate(currentDate, view, -1)
+    set({ currentDate: d, selectedDate: localDate(d) })
   },
 
   goToNext: () => {
     const { view, currentDate } = get()
-    const d = new Date(currentDate)
-    if      (view === "month")  d.setMonth(d.getMonth() + 1)
-    else if (view === "week")   d.setDate(d.getDate() + 7)
-    else if (view === "day")    d.setDate(d.getDate() + 1)
-    else if (view === "agenda") d.setMonth(d.getMonth() + 1)
-    set({ currentDate: d })
+    const d = moveCalendarDate(currentDate, view, 1)
+    set({ currentDate: d, selectedDate: localDate(d) })
   },
 
   goToToday: () => {
@@ -95,8 +90,19 @@ export const useCalendarStore = create<CalendarStore>((set, get) => ({
   activeDates: [],
 
   loadEvents: async (month) => {
-    const data = await window.electron.invoke("calendar:list", month) as CalendarEvent[]
-    set({ events: data })
+    const request = ++eventsRequest
+    const months = new Set([month])
+    const { view, currentDate } = get()
+    if (view === "week") {
+      const start = new Date(currentDate)
+      start.setDate(start.getDate() - start.getDay())
+      const end = new Date(start)
+      end.setDate(end.getDate() + 6)
+      months.add(localDate(start).slice(0, 7))
+      months.add(localDate(end).slice(0, 7))
+    }
+    const batches = await Promise.all([...months].map(m => window.electron.invoke("calendar:list", m) as Promise<CalendarEvent[]>))
+    if (request === eventsRequest) set({ events: batches.flat() })
   },
 
   loadEventsByDate: async (date) => {

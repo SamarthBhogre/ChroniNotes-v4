@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from "react"
 import { useTasksStore } from "../store/tasks.store"
 import type { Task, TaskStatus, TaskPriority } from "../store/tasks.store"
+import StudioHeader from "../components/StudioHeader"
+import "../studios.css"
 
 const STATUSES = ["todo", "in-progress", "done"] as const
 
@@ -274,10 +276,13 @@ export default function Tasks() {
   const doneCount       = rootTasks.filter(t => t.status === "done").length
 
   return (
-    <div style={{ height: "100%", color: "var(--text-primary)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div className="studio-tasks" style={{ height: "100%", color: "var(--text-primary)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <StudioHeader eyebrow="PLAN WITH PURPOSE" title="Make room for progress."
+        description="Organize the next step. Protect what matters. Build a little momentum."
+        stats={[{ label: "To do", value: todoCount }, { label: "In progress", value: inProgressCount }, { label: "Completed", value: doneCount }]} />
 
       {/* ── Header ── */}
-      <div style={{
+      <div className="studio-task-toolbar" style={{
         padding: "18px 28px 14px", borderBottom: "1px solid var(--glass-border)",
         flexShrink: 0, display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap",
       }}>
@@ -290,7 +295,7 @@ export default function Tasks() {
             fontSize: "14px", color: "var(--accent)", flexShrink: 0,
           }}>◈</div>
           <div>
-            <h1 style={{ fontSize: "17px", fontWeight: 700, letterSpacing: "-0.3px", lineHeight: 1.2, margin: 0 }}>Tasks</h1>
+            <h2 style={{ fontSize: "15px", fontWeight: 700, letterSpacing: "-0.3px", lineHeight: 1.2, margin: 0 }}>Your tasks</h2>
             <div style={{ fontSize: "10px", color: "var(--text-tertiary)", marginTop: "1px" }}>
               {tasks.length} total · {tasks.filter(t => t.status === "done").length} completed
             </div>
@@ -304,7 +309,7 @@ export default function Tasks() {
               { key: "kanban" as ViewMode, label: "Board", icon: "▤" },
               { key: "eisenhower" as ViewMode, label: "Matrix", icon: "⊞" },
             ]).map(({ key, label, icon }) => (
-              <button key={key} onClick={() => setViewMode(key)} style={{
+              <button key={key} onClick={() => setViewMode(key)} aria-pressed={viewMode === key} style={{
                 padding: "3px 8px", borderRadius: "6px", fontSize: "10px", fontWeight: 600,
                 background: viewMode === key ? "var(--glass-bg-hover)" : "transparent",
                 border: `1px solid ${viewMode === key ? "var(--glass-border-strong)" : "transparent"}`,
@@ -334,6 +339,7 @@ export default function Tasks() {
         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
           <span style={{ fontSize: "10px", color: "var(--text-tertiary)", fontWeight: 600 }}>Sort:</span>
           <select
+            aria-label="Sort tasks"
             value={sortMode}
             onChange={e => setSortMode(e.target.value as SortMode)}
             style={{
@@ -359,7 +365,7 @@ export default function Tasks() {
           ]).map(({ key, label, count, color }) => {
             const active = filter === key
             return (
-              <button key={key} onClick={() => setFilter(key)} style={{
+              <button key={key} onClick={() => setFilter(key)} aria-pressed={active} style={{
                 padding: "4px 10px", borderRadius: "8px", fontSize: "10px", fontWeight: 600,
                 background: active ? "var(--accent-dim)" : "var(--glass-bg)",
                 border: `1px solid ${active ? "var(--accent-border)" : "transparent"}`,
@@ -381,7 +387,8 @@ export default function Tasks() {
             value={title}
             onChange={e => setTitle(e.target.value)}
             onKeyDown={e => e.key === "Enter" && handleAddTask()}
-            placeholder="Add a new task…"
+            placeholder="What is your next step?"
+            aria-label="New task title"
             style={{
               flex: 1, padding: "8px 14px",
               background: "var(--glass-bg)", border: "1.5px solid var(--glass-border)",
@@ -422,7 +429,7 @@ export default function Tasks() {
 
       {/* ── Kanban Board ── */}
       {viewMode === "kanban" && (
-      <div style={{
+      <div className="studio-task-board" data-filter={filter} role="region" aria-label="Task board" tabIndex={0} style={{
         flex: 1, display: "grid",
         gridTemplateColumns: filter === "all" ? "repeat(3, 1fr)" : "1fr",
         minHeight: 0, overflow: "hidden",
@@ -436,6 +443,7 @@ export default function Tasks() {
           return (
             <div
               key={status}
+              className="studio-task-column"
               ref={setColRef(status)}
               style={{
                 display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden",
@@ -830,6 +838,7 @@ function TaskCard({
 
   return (
     <li
+      className="studio-task-card"
       ref={ref}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}

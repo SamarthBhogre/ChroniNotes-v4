@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState, useCallback } from "react"
 import { useHabitsStore } from "../store/habits.store"
 import type { Habit, GoalType, HabitFrequency } from "../store/habits.store"
+import { habitWeekStart } from "../lib/scheduling"
+import { habitDayComplete } from "../lib/habit-progress"
+import StudioHeader from "../components/StudioHeader"
+import "../studios.css"
+import "../tracking.css"
 
 const COLORS = ["#818cf8", "#60a5fa", "#34d399", "#fbbf24", "#f472b6", "#a78bfa", "#fb923c", "#ef4444", "#2dd4bf", "#e879f9"]
 const ICONS = ["✦", "💪", "📖", "🏃", "💧", "🧘", "🎯", "💤", "🍎", "✍️", "🎵", "🌱", "🧠", "🚫", "⏰", "🏋️"]
@@ -19,8 +24,7 @@ function getWeekDates(offset = 0): string[] {
   const dates: string[] = []
   const today = new Date()
   today.setDate(today.getDate() + offset * 7)
-  const startOfWeek = new Date(today)
-  startOfWeek.setDate(today.getDate() - today.getDay() + 1) // Monday
+  const startOfWeek = habitWeekStart(today)
   for (let i = 0; i < 7; i++) {
     const d = new Date(startOfWeek)
     d.setDate(startOfWeek.getDate() + i)
@@ -60,7 +64,7 @@ export default function Habits() {
     habits, archivedHabits, logs, streaks, error,
     loadHabits, loadArchivedHabits, loadLogs, loadAllStreaks,
     updateHabit, archiveHabit, restoreHabit, deleteHabit,
-    logHabit, unlogHabit, clearError,
+    logHabit, clearError,
   } = useHabitsStore()
 
   const [showCreate, setShowCreate] = useState(false)
@@ -75,9 +79,15 @@ export default function Habits() {
   })
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
 
-  const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset])
+  const [today, setToday] = useState(todayStr)
+  useEffect(() => {
+    const refresh = () => setToday(todayStr())
+    const timer = window.setInterval(refresh, 15000)
+    window.addEventListener("focus", refresh)
+    return () => { clearInterval(timer); window.removeEventListener("focus", refresh) }
+  }, [])
+  const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset, today])
   const monthDates = useMemo(() => getMonthDates(monthDate.year, monthDate.month), [monthDate])
-  const today = todayStr()
 
   useEffect(() => {
     loadHabits()
@@ -88,14 +98,14 @@ export default function Habits() {
     if (view === "week") {
       loadLogs(weekDates[0], weekDates[weekDates.length - 1])
     } else {
-      loadLogs(monthDates[0], monthDates[monthDates.length - 1])
+      loadLogs(fmtDate(habitWeekStart(new Date(`${monthDates[0]}T12:00:00`))), monthDates[monthDates.length - 1])
     }
-  }, [weekDates, monthDates, view])
+  }, [weekDates, monthDates, view, loadLogs])
 
   // Load streaks once habits are loaded
   useEffect(() => {
     if (habits.length > 0) loadAllStreaks()
-  }, [habits.length])
+  }, [habits, today, loadAllStreaks])
 
   const getLogCount = useCallback((habitId: number, date: string) => {
     return logs.find(l => l.habit_id === habitId && l.date === date)?.count || 0
@@ -111,23 +121,8 @@ export default function Habits() {
 
   const handleToggle = async (habitId: number, date: string) => {
     const habit = habits.find(h => h.id === habitId)
-    if (!habit) return
-    const current = getLogCount(habitId, date)
-    if (habit.goal_type === "at_most") {
-      // For "at_most" habits, clicking logs +1 always (user tracks occurrences)
-      if (current > 0) {
-        await unlogHabit(habitId, date)
-      } else {
-        await logHabit(habitId, date)
-      }
-    } else {
-      // "at_least" — toggle to target then back to 0
-      if (current >= habit.target_count) {
-        await unlogHabit(habitId, date)
-      } else {
-        await logHabit(habitId, date)
-      }
-    }
+    if (!habit || date > today || date < (habit.start_date || habit.created_at?.slice(0, 10) || today)) return
+    await logHabit(habitId, date)
   }
 
   // Group habits by section
@@ -151,7 +146,10 @@ export default function Habits() {
   }
 
   return (
-    <div style={{ height: "100%", color: "var(--text-primary)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div className="tracking-page" style={{ height: "100%", color: "var(--text-primary)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <StudioHeader eyebrow="BUILD YOUR RHYTHM" title="Small steps. Lasting momentum." description="Track occurrences honestly, one day at a time."
+        stats={[{ label: "Habits", value: habits.length }, { label: "Weekly goals", value: habits.filter(h => h.frequency === "weekly").length }]} />
+      <p className="tracking-note">+ records one occurrence; − removes one. Weekly goals use Monday–Sunday totals; results appear on Sunday. Limit goals finalize after the period closes. Missing logs count as zero. Reminders check in daily at the configured local time while the app is open; OS notifications must be allowed.</p>
 
       {/* Error toast */}
       {error && (
@@ -389,7 +387,7 @@ function WeekView({
   onDetail: (h: Habit) => void
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+    <div className="tracking-habit-week" style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
       {/* Week header row */}
       <div style={{
         display: "grid", gridTemplateColumns: "minmax(160px, 1fr) repeat(7, 44px) 60px",
@@ -477,11 +475,16 @@ function HabitRow({
 }) {
   const [hovered, setHovered] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
-  const weekGoal = habit.target_count * 7
+  const trackingStart = habit.start_date || habit.created_at?.slice(0, 10) || today
+  const scheduledDates = weekDates.filter(date => date >= trackingStart)
+  const weekGoal = habit.target_count * (habit.frequency === "weekly" ? 1 : scheduledDates.length)
+  const weekComplete = scheduledDates.length > 0 && (habit.frequency === "weekly"
+    ? habitDayComplete(habit, weekDates[6], today, date => getLogCount(habit.id, date))
+    : scheduledDates.every(date => habitDayComplete(habit, date, today, d => getLogCount(habit.id, d))))
   const isBreakHabit = habit.goal_type === "at_most"
 
   return (
-    <div
+    <div className="tracking-habit-row"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => { setHovered(false); setShowMenu(false) }}
       style={{
@@ -515,7 +518,7 @@ function HabitRow({
           <div style={{ fontSize: "9px", color: "var(--text-tertiary)", display: "flex", gap: "6px", alignItems: "center" }}>
             <span>{isBreakHabit ? `≤${habit.target_count}×` : `${habit.target_count}×`}/{habit.frequency === "weekly" ? "wk" : "day"}</span>
             {streak && streak.current_streak > 0 && (
-              <span style={{ color: habit.color }}>🔥 {streak.current_streak}d</span>
+              <span style={{ color: habit.color }}>🔥 {streak.current_streak}{habit.frequency === "weekly" ? "w" : "d"}</span>
             )}
           </div>
         </div>
@@ -553,21 +556,15 @@ function HabitRow({
       {/* Day cells */}
       {weekDates.map(d => {
         const count = getLogCount(habit.id, d)
-        let completed: boolean
-        let partial: boolean
-        if (isBreakHabit) {
-          // "at_most": completed = didn't exceed target (or 0 is best)
-          completed = count === 0
-          partial = count > 0 && count <= habit.target_count
-        } else {
-          completed = count >= habit.target_count
-          partial = count > 0 && !completed
-        }
+        const completed = habitDayComplete(habit, d, today, date => getLogCount(habit.id, date))
+        const partial = count > 0 && !completed
         const isToday = d === today
 
         return (
+          <div key={d} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
           <button
-            key={d}
+            aria-label={`Record ${habit.name} on ${d}; ${count} occurrences`}
+            disabled={d > today || d < (habit.start_date || habit.created_at?.slice(0, 10) || today)}
             onClick={() => onToggle(habit.id, d)}
             style={{
               width: "36px", height: "36px", borderRadius: "8px", margin: "0 auto",
@@ -588,10 +585,12 @@ function HabitRow({
               padding: 0,
             }}
           >
-            {isBreakHabit
-              ? (count === 0 ? "✓" : count > 0 ? count : "")
-              : (completed ? "✓" : count > 0 ? count : "")}
+            {habit.frequency === "weekly" || isBreakHabit ? `${count}+` : completed ? "✓" : count > 0 ? count : "+"}
           </button>
+          <button aria-label={`Remove one ${habit.name} occurrence on ${d}`} disabled={count === 0 || d > today}
+            onClick={() => useHabitsStore.getState().unlogHabit(habit.id, d)}
+            style={{ minWidth: 32, minHeight: 24, borderRadius: 6, color: "var(--text-secondary)", background: "var(--glass-bg)", border: "1px solid var(--glass-border)" }}>−</button>
+          </div>
         )
       })}
 
@@ -599,9 +598,7 @@ function HabitRow({
       <div style={{ textAlign: "center" }}>
         <div style={{
           fontSize: "12px", fontWeight: 700,
-          color: isBreakHabit
-            ? (weekTotal <= habit.target_count * 7 ? "#34d399" : "var(--color-red)")
-            : (weekTotal >= weekGoal ? habit.color : "var(--text-secondary)"),
+          color: weekComplete ? habit.color : "var(--text-secondary)",
         }}>
           {weekTotal}
         </div>
@@ -632,7 +629,6 @@ function MonthView({
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {habits.map(habit => {
         const streak = streaks[habit.id]
-        const isBreakHabit = habit.goal_type === "at_most"
 
         return (
           <div key={habit.id} style={{
@@ -650,7 +646,7 @@ function MonthView({
               <span style={{ fontSize: 12, fontWeight: 600 }}>{habit.name}</span>
               {streak && (
                 <span style={{ fontSize: 9, color: "var(--text-tertiary)", marginLeft: "auto" }}>
-                  {streak.current_streak > 0 && <span style={{ color: habit.color, marginRight: 8 }}>🔥 {streak.current_streak}d</span>}
+                  {streak.current_streak > 0 && <span style={{ color: habit.color, marginRight: 8 }}>🔥 {streak.current_streak}{habit.frequency === "weekly" ? "w" : "d"}</span>}
                   {streak.completion_rate > 0 && <span>{Math.round(streak.completion_rate * 100)}% rate</span>}
                 </span>
               )}
@@ -670,12 +666,7 @@ function MonthView({
               {monthDates.map(d => {
                 const count = getLogCount(habit.id, d)
                 const isFuture = d > today
-                let completed: boolean
-                if (isBreakHabit) {
-                  completed = count === 0 && !isFuture
-                } else {
-                  completed = count >= habit.target_count
-                }
+                const completed = habitDayComplete(habit, d, today, date => getLogCount(habit.id, date))
                 const intensity = completed ? 1 : count > 0 ? 0.4 : 0
 
                 return (
@@ -1137,8 +1128,8 @@ function HabitDetailModal({
 
         {/* Stats grid */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-          <StatCard label="Current Streak" value={streak ? `${streak.current_streak}d` : "0d"} icon="🔥" color={habit.color} />
-          <StatCard label="Best Streak" value={streak ? `${streak.best_streak}d` : "0d"} icon="🏆" color="#fbbf24" />
+          <StatCard label="Current Streak" value={`${streak?.current_streak ?? 0}${habit.frequency === "weekly" ? "w" : "d"}`} icon="🔥" color={habit.color} />
+          <StatCard label="Best Streak" value={`${streak?.best_streak ?? 0}${habit.frequency === "weekly" ? "w" : "d"}`} icon="🏆" color="#fbbf24" />
           <StatCard label="Total Completions" value={streak ? String(streak.total_completions) : "0"} icon="✓" color="#34d399" />
           <StatCard label="Completion Rate" value={streak ? `${Math.round(streak.completion_rate * 100)}%` : "0%"} icon="📊" color="#60a5fa" />
         </div>
