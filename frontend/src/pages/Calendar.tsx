@@ -2,7 +2,12 @@ import { useEffect, useState, useRef, useMemo } from "react"
 import { useCalendarStore } from "../store/calendar.store"
 import type { CalendarEvent, EventType } from "../store/calendar.store"
 import { useTasksStore } from "../store/tasks.store"
-import { useHabitsStore } from "../store/habits.store"
+import { useHabitsStore, type HabitLog } from "../store/habits.store"
+import { habitDayComplete } from "../lib/habit-progress"
+import { habitWeekStart, localDate } from "../lib/scheduling"
+import StudioHeader from "../components/StudioHeader"
+import "../studios.css"
+import "../tracking.css"
 
 /* ── Colour map for event types ── */
 const TYPE_COLORS: Record<EventType | string, { bg: string; border: string; text: string; dot: string }> = {
@@ -526,7 +531,7 @@ function DayView({ date, events, tasksWithDates, habitSummary, countdowns, onEve
 
   return (
     <div style={{ flex: 1, overflowY: "auto", padding: "24px 28px" }}>
-      {dayEvts.length === 0 && dayTasks.length === 0 ? (
+      {dayEvts.length === 0 && dayTasks.length === 0 && dayCountdowns.length === 0 && !dayHabits?.total ? (
         <div style={{ textAlign: "center", padding: "60px 0", color: "var(--text-tertiary)", fontSize: "13px" }}>
           <div style={{ fontSize: "36px", marginBottom: "12px", opacity: 0.3 }}>◌</div>
           <div>No events for this day</div>
@@ -892,10 +897,18 @@ export default function Calendar() {
     createEvent, updateEvent, deleteEvent,
   } = useCalendarStore()
 
-  const { tasks } = useTasksStore()
-  const tasksWithDates = tasks.filter(t => t.due_date)
+  const { tasks, loadTasks } = useTasksStore()
+  const tasksWithDates = tasks.filter(t => t.due_date && !t.archived)
 
-  const { habits, logs, loadHabits, loadLogs } = useHabitsStore()
+  const { habits, logs: changedLogs, loadHabits } = useHabitsStore()
+  const [logs, setLogs] = useState<HabitLog[]>([])
+  const [today, setToday] = useState(() => localDate(new Date()))
+  useEffect(() => {
+    const refresh = () => setToday(localDate(new Date()))
+    const timer = window.setInterval(refresh, 15000)
+    window.addEventListener("focus", refresh)
+    return () => { clearInterval(timer); window.removeEventListener("focus", refresh) }
+  }, [])
 
   const [modal, setModal] = useState<{ date: string; event?: CalendarEvent | null } | null>(null)
 
@@ -904,20 +917,39 @@ export default function Calendar() {
   const mk    = monthKey(currentDate)
 
   // Load countdowns from localStorage
-  const [countdowns] = useState<CountdownItem[]>(loadCountdowns)
+  const [countdowns, setCountdowns] = useState<CountdownItem[]>(loadCountdowns)
+  const [dataError, setDataError] = useState("")
 
   useEffect(() => {
-    loadEvents(mk)
-    loadActiveDates(mk)
-    loadHabits()
-  }, [mk])
+    const refresh = () => setCountdowns(loadCountdowns())
+    window.addEventListener("chroninotes:countdowns-changed", refresh)
+    window.addEventListener("storage", refresh)
+    window.addEventListener("focus", refresh)
+    return () => {
+      window.removeEventListener("chroninotes:countdowns-changed", refresh)
+      window.removeEventListener("storage", refresh)
+      window.removeEventListener("focus", refresh)
+    }
+  }, [])
 
-  // Load habit logs for the visible month range (with padding)
   useEffect(() => {
-    const firstDay = `${year}-${String(month + 1).padStart(2, "0")}-01`
-    const lastDay = `${year}-${String(month + 1).padStart(2, "0")}-${String(daysInMonth(year, month)).padStart(2, "0")}`
-    loadLogs(firstDay, lastDay)
-  }, [year, month])
+    let cancelled = false
+    setDataError("")
+    Promise.all([loadEvents(mk), loadActiveDates(mk), loadHabits(), loadTasks()])
+      .catch(() => { if (!cancelled) setDataError("Could not refresh calendar data. Navigate again to retry.") })
+    return () => { cancelled = true }
+  }, [mk, view, currentDate, loadEvents, loadActiveDates, loadHabits, loadTasks])
+
+  // Keep Calendar's log range separate from the Habits page.
+  useEffect(() => {
+    let cancelled = false
+    const firstDay = localDate(habitWeekStart(new Date(year, month, 1)))
+    const lastDay = localDate(new Date(year, month + 1, 0))
+    window.electron.invoke("habits:allLogs", { start_date: firstDay, end_date: lastDay })
+      .then(data => { if (!cancelled) setLogs(data as HabitLog[]) })
+      .catch(() => { if (!cancelled) setDataError("Could not refresh habit activity.") })
+    return () => { cancelled = true }
+  }, [year, month, today, changedLogs])
 
   // Build habit summary per day
   const habitSummary = useMemo<Record<string, DayHabitSummary>>(() => {
@@ -925,25 +957,20 @@ export default function Calendar() {
     const summary: Record<string, DayHabitSummary> = {}
     const activeHabits = habits.filter(h => !h.archived)
 
-    // Build log index: date -> set of completed habit_ids
-    const logIndex: Record<string, Set<number>> = {}
-    for (const log of logs) {
-      if (!logIndex[log.date]) logIndex[log.date] = new Set()
-      logIndex[log.date].add(log.habit_id)
-    }
+    const logIndex = new Map(logs.map(log => [`${log.habit_id}:${log.date}`, log.count]))
 
     // For each day in the current month
     const totalDays = daysInMonth(year, month)
     for (let d = 1; d <= totalDays; d++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`
-      const completedIds = logIndex[dateStr] ?? new Set()
       const dayHabits = activeHabits
-        .filter(h => !h.start_date || h.start_date <= dateStr)
+        .filter(h => (h.start_date || h.created_at?.slice(0, 10) || today) <= dateStr)
+        .filter(h => h.frequency !== "weekly" || new Date(`${dateStr}T12:00:00`).getDay() === 0)
         .map(h => ({
           name: h.name,
           icon: h.icon,
           color: h.color,
-          done: completedIds.has(h.id),
+          done: habitDayComplete(h, dateStr, today, date => logIndex.get(`${h.id}:${date}`) ?? 0),
         }))
       if (dayHabits.length > 0) {
         summary[dateStr] = {
@@ -954,7 +981,7 @@ export default function Calendar() {
       }
     }
     return summary
-  }, [habits, logs, year, month])
+  }, [habits, logs, year, month, today])
 
   const handleSelectDate = (date: string) => {
     setSelectedDate(date)
@@ -1001,7 +1028,10 @@ export default function Calendar() {
   const remindersCount = events.filter(e => e.reminder_minutes != null && e.reminder_minutes >= 0).length
 
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", color: "var(--text-primary)", overflow: "hidden" }}>
+    <div className="tracking-page" style={{ height: "100%", display: "flex", flexDirection: "column", color: "var(--text-primary)", overflow: "hidden" }}>
+      <StudioHeader eyebrow="MAKE TIME FOR WHAT MATTERS" title="A clearer view of your days." description="Plans, deadlines, and routines in one place."
+        stats={[{ label: "Loaded events", value: totalEvents }, { label: "Reminders", value: remindersCount }]} />
+      {dataError && <p className="tracking-note" role="alert">{dataError}</p>}
 
       {/* ── Header bar ── */}
       <div style={{ padding: "18px 24px 14px", borderBottom: "1px solid var(--glass-border)", display: "flex", alignItems: "center", gap: "12px", flexShrink: 0, flexWrap: "wrap" }}>
@@ -1076,9 +1106,9 @@ export default function Calendar() {
       </div>
 
       {/* ── Calendar body + sidebar ── */}
-      <div style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden" }}>
+      <div className="tracking-calendar-body" style={{ flex: 1, display: "flex", minHeight: 0, overflow: "hidden" }}>
         {/* Main view */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
+        <div className="tracking-calendar-view" style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
           {view === "month" && (
             <MonthView year={year} month={month} events={events}
               selectedDate={selectedDate} tasksWithDates={tasksWithDates}

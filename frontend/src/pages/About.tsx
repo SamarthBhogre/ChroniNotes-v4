@@ -1,5 +1,6 @@
 import { useState } from "react"
 import BrandLogo from "../components/BrandLogo"
+import "../preferences.css"
 
 interface AboutProps {
   onClose: () => void
@@ -63,7 +64,7 @@ const SHORTCUT_SECTIONS = [
   {
     title: "Habits",
     items: [
-      { keys: ["Click ○"], desc: "Toggle habit completion for today" },
+      { keys: ["+ / −"], desc: "Record or remove one habit occurrence" },
       { keys: ["←  →"], desc: "Navigate weeks" },
     ],
   },
@@ -92,7 +93,7 @@ const FEATURES = [
 
 const TECH_STACK = [
   "Tauri 2 (Rust backend)",
-  "React 18 + TypeScript",
+  "React 19 + TypeScript",
   "TipTap rich text editor",
   "SQLite (rusqlite)",
   "Zustand state management",
@@ -115,7 +116,7 @@ export default function About({ onClose }: AboutProps) {
         animation: "pageEnter 0.2s ease",
       }}
     >
-      <div
+      <div className="preferences-panel"
         onClick={e => e.stopPropagation()}
         style={{
           width: "min(620px, calc(100vw - 48px))",

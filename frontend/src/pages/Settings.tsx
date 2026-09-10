@@ -1,14 +1,15 @@
 import { useThemeStore, THEMES } from "../store/theme.store"
 import type { ThemeId } from "../store/theme.store"
+import "../preferences.css"
 
 interface SettingsProps {
   onClose: () => void
 }
 
 /* ── Reusable toggle switch ── */
-function ToggleSwitch({ on, onToggle }: { on: boolean; onToggle: () => void }) {
+function ToggleSwitch({ on, onToggle, label }: { on: boolean; onToggle: () => void; label: string }) {
   return (
-    <button
+    <button role="switch" aria-checked={on} aria-label={label}
       onClick={onToggle}
       style={{
         width: "44px", height: "24px", borderRadius: "12px",
@@ -67,7 +68,7 @@ function SettingRow({
           </div>
         </div>
       </div>
-      <ToggleSwitch on={active} onToggle={onToggle} />
+      <ToggleSwitch on={active} onToggle={onToggle} label={title} />
     </div>
   )
 }
@@ -85,7 +86,7 @@ export default function Settings({ onClose }: SettingsProps) {
         animation: "pageEnter 0.2s ease",
       }}
     >
-      <div
+      <div className="preferences-panel"
         onClick={e => e.stopPropagation()}
         style={{
           width: "min(560px, calc(100vw - 48px))",
@@ -110,7 +111,7 @@ export default function Settings({ onClose }: SettingsProps) {
             <h2 style={{
               fontSize: "1.25rem", fontWeight: 700, letterSpacing: "-0.3px",
               color: "var(--text-primary)", margin: 0,
-            }}>Appearance & Memory</h2>
+            }}>Make this space yours.</h2>
           </div>
           <button
             onClick={onClose}
@@ -136,12 +137,13 @@ export default function Settings({ onClose }: SettingsProps) {
           {/* ══ THEME SECTION ══ */}
           <SectionLabel>Theme</SectionLabel>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div className="preferences-themes" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             {THEMES.map(t => {
               const active = theme === t.id
               return (
                 <button
                   key={t.id}
+                  className="preferences-theme" aria-pressed={active}
                   onClick={() => setTheme(t.id as ThemeId)}
                   style={{
                     display: "flex", alignItems: "center", gap: "14px",

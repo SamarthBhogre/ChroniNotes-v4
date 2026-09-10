@@ -2,6 +2,8 @@ import { forwardRef, useCallback, useEffect, useRef, useState } from "react"
 import RichEditor from "../components/editor/RichEditor"
 import NotesSidebar from "../components/notes/NotesSidebar"
 import { useNotesStore, type Difficulty } from "../store/notes.store"
+import StudioHeader from "../components/StudioHeader"
+import "../studios.css"
 
 /* ── Difficulty config (used by folder cards) ── */
 const DIFF_CFG: Record<NonNullable<Difficulty>, { label: string; color: string; bg: string; border: string }> = {
@@ -16,6 +18,7 @@ export default function Notes() {
 
   const [loadedContent, setLoadedContent] = useState<any>(null)
   const [contentReady, setContentReady]   = useState(false)
+  const [libraryOpen, setLibraryOpen] = useState(true)
 
   /* load content whenever active note changes */
   useEffect(() => {
@@ -40,18 +43,23 @@ export default function Notes() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", color: "var(--text-primary)" }}>
+    <div className="studio-notes" style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", color: "var(--text-primary)" }}>
+      <StudioHeader eyebrow="YOUR KNOWLEDGE STUDIO" title="Give your ideas a home."
+        description="Capture a spark, connect your thinking, and make something worth keeping."
+        stats={[{ label: "Pages", value: notes.filter(note => !note.isFolder).length }, { label: "Folders", value: notes.filter(note => note.isFolder).length }]} />
 
       {/* ──────────────────────────────────────
           TOP NAV BAR  (breadcrumb + New button)
       ────────────────────────────────────── */}
-      <div style={{
+      <div className="studio-notes-toolbar" style={{
         flexShrink: 0, height: "40px",
         background: "var(--bg-surface)",
         borderBottom: "1px solid var(--glass-border)",
         display: "flex", alignItems: "center",
         padding: "0 14px", gap: "8px",
       }}>
+        <button className="studio-library-toggle" aria-expanded={libraryOpen} aria-controls="studio-note-library"
+          onClick={() => setLibraryOpen(open => !open)}>{libraryOpen ? "Hide library" : "Show library"}</button>
         {/* Breadcrumb */}
         <div style={{ display: "flex", alignItems: "center", gap: "3px", flex: 1, minWidth: 0, overflow: "hidden" }}>
           {breadcrumb.length === 0 ? (
@@ -100,15 +108,15 @@ export default function Notes() {
       {/* ──────────────────────────────────────
           SIDEBAR + CONTENT ROW
       ────────────────────────────────────── */}
-      <div style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
+      <div className="studio-notes-row" data-library-open={libraryOpen} style={{ flex: 1, display: "flex", overflow: "hidden", minHeight: 0 }}>
 
-        {/* Sidebar — fixed width */}
-        <div style={{ width: "240px", flexShrink: 0, height: "100%" }}>
+        {/* Keep the library mounted so its loading and selection state survive toggling. */}
+        <div id="studio-note-library" className="studio-library" hidden={!libraryOpen} style={{ width: "240px", flexShrink: 0, height: "100%" }}>
           <NotesSidebar />
         </div>
 
         {/* Content pane — fills all remaining space */}
-        <div style={{ flex: 1, minWidth: 0, height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div className="studio-writing-pane" style={{ flex: 1, minWidth: 0, height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
           {activeNoteId && activeNote && !activeNote.isFolder && contentReady ? (
             /* ── Full-height RichEditor (owns title bar + toolbar + scroll area) ── */
@@ -270,9 +278,9 @@ function FolderView({ note, allNotes, childNotes, onOpenNote, onCreateNote, onCr
   const { startCardDrag, registerCard, overId, isDragging, isDraggingAny } = useFolderDrag(handleDrop)
 
   return (
-    <div style={{ flex: 1, overflow: "auto", padding: "28px 36px", cursor: isDraggingAny ? "grabbing" : "default" }}>
+    <div className="studio-folder" style={{ flex: 1, overflow: "auto", padding: "28px 36px", cursor: isDraggingAny ? "grabbing" : "default" }}>
       {/* ── Folder hero ── */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: "16px", marginBottom: "20px", padding: "20px 24px", borderRadius: "16px", background: "var(--glass-bg)", border: "1px solid var(--glass-border)" }}>
+      <div className="studio-folder-hero" style={{ display: "flex", alignItems: "flex-start", gap: "16px", marginBottom: "20px", padding: "20px 24px", borderRadius: "16px", background: "var(--glass-bg)", border: "1px solid var(--glass-border)" }}>
         <div style={{ width: "56px", height: "56px", borderRadius: "14px", flexShrink: 0, background: "var(--accent-dim)", border: "1px solid var(--accent-border)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "26px" }}>{note.icon}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <h2 style={{ fontSize: "22px", fontWeight: 700, color: "var(--text-primary)", margin: "0 0 4px", letterSpacing: "-0.4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{note.title}</h2>
@@ -317,7 +325,7 @@ function FolderView({ note, allNotes, childNotes, onOpenNote, onCreateNote, onCr
       {folderChildren.length > 0 && (
         <div style={{ marginBottom: "20px" }}>
           <SectionLabel>Folders</SectionLabel>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: "8px" }}>
+          <div className="studio-folder-grid">
             {folderChildren.map(child => (
               <FolderCard key={child.id} note={child}
                 childCount={allNotes.filter(n => n.parentId === child.id).length}
@@ -338,7 +346,7 @@ function FolderView({ note, allNotes, childNotes, onOpenNote, onCreateNote, onCr
       {pageChildren.length > 0 && (
         <div>
           <SectionLabel>Pages</SectionLabel>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "8px" }}>
+          <div className="studio-folder-grid">
             {pageChildren.map(child => (
               <NoteCard key={child.id} note={child}
                 isOver={overId === child.id && !isDragging(child.id)}
@@ -385,14 +393,16 @@ interface CardProps {
   note: any; isOver: boolean; isDragging: boolean
   isSelected: boolean; selectMode: boolean
   onPointerDown: (e: React.PointerEvent) => void
-  onClick: (e: React.MouseEvent) => void
+  onClick: (e: React.MouseEvent | React.KeyboardEvent) => void
 }
 
 const FolderCard = forwardRef<HTMLDivElement, CardProps & { childCount: number }>(
   ({ note, childCount, isOver, isDragging, isSelected, selectMode, onPointerDown, onClick }, ref) => {
     const [hov, setHov] = useState(false)
     return (
-      <div ref={ref}
+      <div ref={ref} className="studio-note-card" role="button" tabIndex={0}
+        aria-label={note.title} aria-pressed={selectMode ? isSelected : undefined} data-dragging={isDragging}
+        onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onClick(event) } }}
         onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
         onPointerDown={onPointerDown} onClick={onClick}
         style={{
@@ -429,7 +439,9 @@ const NoteCard = forwardRef<HTMLDivElement, CardProps>(
     const [hov, setHov] = useState(false)
     const diffCfg = note.difficulty ? DIFF_CFG[note.difficulty as NonNullable<Difficulty>] : null
     return (
-      <div ref={ref}
+      <div ref={ref} className="studio-note-card" role="button" tabIndex={0}
+        aria-label={note.title} aria-pressed={selectMode ? isSelected : undefined} data-dragging={isDragging}
+        onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onClick(event) } }}
         onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
         onPointerDown={onPointerDown} onClick={onClick}
         style={{
@@ -474,10 +486,10 @@ const NoteCard = forwardRef<HTMLDivElement, CardProps>(
 ══════════════════════════════════════ */
 function EmptyState({ onCreate }: { onCreate: () => void }) {
   return (
-    <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <div className="studio-notes-empty" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ textAlign: "center", maxWidth: "320px" }}>
         <div style={{ width: "72px", height: "72px", borderRadius: "20px", margin: "0 auto 24px", background: "var(--glass-bg)", border: "1px solid var(--glass-border)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "30px", opacity: 0.3 }}>◉</div>
-        <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "8px", letterSpacing: "-0.2px" }}>ChroniNotes</h2>
+        <h2 style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "8px", letterSpacing: "-0.2px" }}>A blank page. Endless possibilities.</h2>
         <p style={{ fontSize: "12px", color: "var(--text-tertiary)", lineHeight: 1.7, marginBottom: "24px" }}>
           Select a page from the sidebar or create a new one.<br />
           Drag images in · type <code style={{ color: "var(--accent)", background: "var(--accent-dim)", padding: "1px 5px", borderRadius: "4px" }}>/link</code> to connect pages<br />
@@ -487,7 +499,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
           onMouseEnter={e => e.currentTarget.style.transform = "translateY(-1px) scale(1.02)"}
           onMouseLeave={e => e.currentTarget.style.transform = "none"}
         >
-          <span style={{ fontSize: "16px", lineHeight: 1 }}>+</span> Create your first page
+          <span style={{ fontSize: "16px", lineHeight: 1 }}>+</span> Create a new page
         </button>
       </div>
     </div>

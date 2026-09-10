@@ -2,22 +2,32 @@ import { useEffect, useRef, useState } from "react"
 import { useTasksStore } from "../store/tasks.store"
 import ActivityHeatmap from "../components/ActivityHeatmap"
 import CalendarMiniWidget from "../components/CalendarMiniWidget"
+import WorkspaceHero from "../components/WorkspaceHero"
 
 type Page = "dashboard" | "tasks" | "notes" | "timer" | "calendar" | "habits" | "countdown"
 
 function useCardEntrance(_count: number) {
   const refs = useRef<(HTMLDivElement | null)[]>([])
   useEffect(() => {
-    refs.current.forEach((el, i) => {
-      if (!el) return
+    const elements = refs.current.filter((el): el is HTMLDivElement => el !== null)
+    const preference = window.matchMedia("(prefers-reduced-motion: reduce)")
+    const timers: ReturnType<typeof setTimeout>[] = []
+    const reveal = () => {
+      timers.forEach(clearTimeout)
+      elements.forEach(el => { el.style.opacity = "1"; el.style.transform = "" })
+    }
+    const onPreferenceChange = () => { if (preference.matches) reveal() }
+    if (!preference.matches) elements.forEach((el, i) => {
       el.style.opacity = "0"
       el.style.transform = "translateY(10px) scale(0.98)"
-      setTimeout(() => {
-        el.style.transition = "opacity 0.25s ease, transform 0.25s cubic-bezier(0.22,1,0.36,1)"
+      timers.push(setTimeout(() => {
+        el.style.transition = "opacity 0.25s ease, transform 0.25s ease"
         el.style.opacity = "1"
-        el.style.transform = "translateY(0) scale(1)"
-      }, 60 + i * 45)
+        el.style.transform = ""
+      }, 40 + i * 30))
     })
+    preference.addEventListener("change", onPreferenceChange)
+    return () => { reveal(); preference.removeEventListener("change", onPreferenceChange) }
   }, [])
   return refs
 }
@@ -122,7 +132,8 @@ export default function Dashboard({ onNavigate }: Props) {
 
   return (
     <div style={{ height: "100%", color: "var(--text-primary)", overflowY: "auto" }}>
-      <div style={{ maxWidth: "1060px", margin: "0 auto", padding: "20px 32px 24px" }}>
+      <div className="spatial-dashboard">
+        <WorkspaceHero onFocus={() => onNavigate?.("timer")} onNotes={() => onNavigate?.("notes")} />
 
         {/* ── Header row ── */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
@@ -162,9 +173,9 @@ export default function Dashboard({ onNavigate }: Props) {
         </div>
 
         {/* ── Row 1: Nav Cards (compact) ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "10px", marginBottom: "12px" }}>
+        <div className="spatial-tools">
           {CARDS.map(({ icon, label, desc, rgb, page }, i) => (
-            <div key={label} ref={el => { cardRefs.current[i] = el }} className="glass"
+            <div key={label} ref={el => { cardRefs.current[i] = el }} className="glass spatial-tool"
               onClick={() => onNavigate?.(page)}
               style={{
                 borderRadius: "12px", padding: "14px 16px",
@@ -194,10 +205,10 @@ export default function Dashboard({ onNavigate }: Props) {
         </div>
 
         {/* ── Row 2: Progress Ring + Streak ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "12px" }}>
+        <div className="spatial-progress">
 
           {/* Daily Progress Ring */}
-          <div ref={el => { cardRefs.current[4] = el }} className="glass" style={{ borderRadius: "12px", padding: "14px 18px" }}>
+          <div ref={el => { cardRefs.current[6] = el }} className="glass" style={{ borderRadius: "12px", padding: "14px 18px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
               <div>
                 <div style={{ fontSize: "9px", fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--text-tertiary)" }}>Daily Progress</div>
@@ -243,7 +254,7 @@ export default function Dashboard({ onNavigate }: Props) {
           </div>
 
           {/* Streak + breakdown */}
-          <div ref={el => { cardRefs.current[5] = el }} className="glass" style={{ borderRadius: "12px", padding: "14px 18px" }}>
+          <div ref={el => { cardRefs.current[7] = el }} className="glass" style={{ borderRadius: "12px", padding: "14px 18px" }}>
             <div style={{ fontSize: "9px", fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase", color: "var(--text-tertiary)" }}>Overview</div>
             <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "8px", marginTop: "1px" }}>{isPomodoro ? "Focus Stats" : "Task Stats"}</div>
 
@@ -290,14 +301,14 @@ export default function Dashboard({ onNavigate }: Props) {
         </div>
 
         {/* ── Row 3: Countdown + Mini Calendar + Heatmap ── */}
-        <div style={{ display: "grid", gridTemplateColumns: "200px 260px 1fr", gap: "10px" }}>
-          <div ref={el => { cardRefs.current[6] = el }}>
+        <div className="spatial-widgets">
+          <div ref={el => { cardRefs.current[8] = el }}>
             <CountdownWidget onNavigate={() => onNavigate?.("countdown")} />
           </div>
-          <div ref={el => { cardRefs.current[7] = el }}>
+          <div ref={el => { cardRefs.current[9] = el }}>
             <CalendarMiniWidget onNavigate={() => onNavigate?.("calendar")} />
           </div>
-          <div ref={el => { cardRefs.current[8] = el }}>
+          <div ref={el => { cardRefs.current[10] = el }}>
             <ActivityHeatmap
               history={activeHistory}
               weeks={20}

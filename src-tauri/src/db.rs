@@ -134,6 +134,12 @@ impl Database {
                 count     INTEGER NOT NULL DEFAULT 1 CHECK(count >= 1),
                 FOREIGN KEY (habit_id) REFERENCES habits(id) ON DELETE CASCADE,
                 UNIQUE(habit_id, date)
+             );
+
+             CREATE TABLE IF NOT EXISTS habit_reminder_deliveries (
+                habit_id INTEGER NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
+                date TEXT NOT NULL,
+                PRIMARY KEY (habit_id, date)
              );",
         )
         .expect("Failed to create schema");

@@ -7,6 +7,9 @@ use std::sync::{
 };
 use tauri_plugin_notification::NotificationExt;
 
+#[path = "habit_reminders.rs"]
+mod habit_reminders;
+
 /// Set to `true` while a scheduler thread is alive.
 /// `compare_exchange` prevents double-spawn even on fast app restart.
 static SCHEDULER_RUNNING: AtomicBool = AtomicBool::new(false);
@@ -54,6 +57,11 @@ pub fn spawn_notification_scheduler(
 
             if let Err(e) = check_and_notify(&app, &db) {
                 log::error!("[Notifications] Check error: {}", e);
+            }
+            if let Err(e) = habit_reminders::deliver_due(&db, chrono::Local::now().naive_local(), |title, body| {
+                app.notification().builder().title(title).body(body).show().map_err(|e| e.to_string())
+            }) {
+                log::error!("[Notifications] Habit check error: {}", e);
             }
         }
     });

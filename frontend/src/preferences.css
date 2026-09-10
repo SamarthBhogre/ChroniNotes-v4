@@ -1,0 +1,8 @@
+.preferences-panel { border-radius: 26px !important; width: min(760px, calc(100vw - 32px)) !important; }
+.preferences-panel > div:first-child { padding: 26px 28px 20px !important; background: linear-gradient(120deg, var(--accent-dim), transparent); }
+.preferences-panel h2 { font-size: 24px !important; letter-spacing: -.04em !important; }
+.preferences-themes { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px !important; }
+.preferences-theme { border-radius: 16px !important; flex-wrap: wrap; align-content: start; min-height: 124px; }
+.preferences-theme[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: -2px; }
+.preferences-panel button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 600px) { .preferences-themes { grid-template-columns: 1fr; } }

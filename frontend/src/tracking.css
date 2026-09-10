@@ -1,0 +1,28 @@
+.tracking-page { background: radial-gradient(ellipse at 80% 0%, var(--accent-dim), transparent 60%); }
+.tracking-page > .studio-header { padding-block: 22px; }
+.tracking-toolbar { flex-wrap: wrap; gap: 12px; background: var(--bg-surface); }
+.tracking-toolbar button { min-height: 34px; }
+.tracking-note { padding: 10px 24px; font-size: 11px; line-height: 1.6; color: var(--text-secondary); background: var(--bg-surface); border-bottom: 1px solid var(--glass-border); flex-shrink: 0; }
+.tracking-countdown-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 18px; }
+.tracking-countdown-card { border-radius: 20px !important; padding: 24px !important; }
+.tracking-countdown-hero { border-radius: 24px !important; padding: 28px !important; flex-wrap: wrap; }
+.tracking-calendar-body { padding: 16px; gap: 16px; overflow: auto !important; }
+.tracking-calendar-view { border: 1px solid var(--glass-border); border-radius: 18px; background: var(--bg-surface); min-width: 490px; overflow: auto !important; }
+.tracking-habit-week { min-width: 590px; padding: 16px; border: 1px solid var(--glass-border); border-radius: 20px; background: var(--bg-surface); }
+.tracking-habit-row { padding-block: 12px !important; border-bottom: 1px solid var(--glass-border); }
+.tracking-timer-body { gap: 20px; padding: 24px; overflow: auto !important; }
+.tracking-timer-stage { min-height: 380px; border: 1px solid var(--accent-border); border-radius: 28px; background: radial-gradient(ellipse at 50% 40%, var(--accent-dim), var(--bg-surface) 70%); box-shadow: 0 16px 40px rgba(0,0,0,.1); }
+.tracking-timer-dial { border-radius: 50%; box-shadow: 0 0 0 12px var(--glass-bg), 0 0 0 13px var(--glass-border), 0 20px 40px rgba(0,0,0,.12); }
+.tracking-timer-action { min-height: 44px; border-radius: 12px !important; }
+.tracking-timer-digit { min-width: 1ch; width: auto !important; }
+@container (max-width: 800px) {
+  .tracking-timer-body { flex-direction: column; padding: 16px; }
+  .tracking-timer-body > div { width: 100% !important; flex-shrink: 0; }
+  .tracking-calendar-body { flex-direction: column; }
+  .tracking-calendar-body > div { flex-shrink: 0 !important; min-height: 420px; }
+  .tracking-calendar-view { min-height: 540px !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tracking-timer-digit { transform: none !important; opacity: 1 !important; }
+  .tracking-countdown-card { transform: none !important; }
+}

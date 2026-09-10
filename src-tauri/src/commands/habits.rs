@@ -448,13 +448,16 @@ pub fn habits_all_logs(
 #[tauri::command]
 pub fn habits_streak(habit_id: i64, db: State<Database>) -> Result<HabitStreak, String> {
     let conn = db.conn().lock().map_err(|e| e.to_string())?;
+    habit_streak_inner(habit_id, &conn, chrono::Local::now().date_naive())
+}
 
+fn habit_streak_inner(habit_id: i64, conn: &rusqlite::Connection, today_date: chrono::NaiveDate) -> Result<HabitStreak, String> {
     // Get habit info for target
-    let (target_count, goal_type, start_date): (i64, String, Option<String>) = conn
+    let (target_count, goal_type, start_date, frequency): (i64, String, Option<String>, String) = conn
         .query_row(
-            "SELECT target_count, COALESCE(goal_type, 'at_least'), start_date FROM habits WHERE id = ?1",
+            "SELECT target_count, COALESCE(goal_type, 'at_least'), COALESCE(NULLIF(start_date, ''), substr(created_at, 1, 10)), frequency FROM habits WHERE id = ?1",
             params![habit_id],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
         )
         .map_err(|e| format!("Habit {} not found: {}", habit_id, e))?;
 
@@ -498,10 +501,7 @@ pub fn habits_streak(habit_id: i64, db: State<Database>) -> Result<HabitStreak, 
     }
 
     // Determine the finite date range that the streak is allowed to inspect.
-    let today_date = chrono::Local::now().date_naive();
-    let today = today_date.format("%Y-%m-%d").to_string();
     let earliest = logs.last().map(|(d, _)| d.clone());
-    let latest = logs.first().map(|(d, _)| d.clone()).unwrap_or_else(|| today.clone());
     let tracking_start = start_date
         .as_deref()
         .and_then(|d| chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d").ok())
@@ -512,7 +512,31 @@ pub fn habits_streak(habit_id: i64, db: State<Database>) -> Result<HabitStreak, 
         })
         .unwrap_or(today_date);
 
-    // Current streak: walk backwards from today, bounded by the habit's tracked range.
+    // Weekly goals are evaluated once per Monday-based calendar week.
+    let weekly = frequency == "weekly";
+    let period_days = if weekly { 7 } else { 1 };
+    let period_start = |date: chrono::NaiveDate| {
+        if weekly {
+            date - chrono::Duration::days(chrono::Datelike::weekday(&date).num_days_from_monday() as i64)
+        } else { date }
+    };
+    if weekly {
+        date_map.clear();
+        for (raw, count) in &logs {
+            if let Ok(date) = chrono::NaiveDate::parse_from_str(raw, "%Y-%m-%d") {
+                if date >= tracking_start && date <= today_date {
+                    let key = period_start(date).format("%Y-%m-%d").to_string();
+                    *date_map.entry(key).or_insert(0) += (*count).max(0);
+                }
+            }
+        }
+    }
+    let tracking_start = period_start(tracking_start);
+    // A limit goal cannot be finalized until its day/week has closed.
+    let today_date = period_start(today_date) - chrono::Duration::days(if goal_type == "at_most" { period_days } else { 0 });
+    let today = today_date.format("%Y-%m-%d").to_string();
+
+    // Current streak: walk backwards in complete goal periods.
     let mut current_streak: i64 = 0;
     let mut check_date = today_date;
 
@@ -521,10 +545,10 @@ pub fn habits_streak(habit_id: i64, db: State<Database>) -> Result<HabitStreak, 
         let count = date_map.get(&ds).copied().unwrap_or(0);
         if is_completed(count) {
             current_streak += 1;
-            check_date -= chrono::Duration::days(1);
+            check_date -= chrono::Duration::days(period_days);
         } else if ds == today && goal_type != "at_most" {
-            // Today might not be completed yet — check yesterday
-            check_date -= chrono::Duration::days(1);
+            // The current day/week may still be in progress.
+            check_date -= chrono::Duration::days(period_days);
         } else {
             break;
         }
@@ -535,9 +559,8 @@ pub fn habits_streak(habit_id: i64, db: State<Database>) -> Result<HabitStreak, 
     let mut running: i64 = 0;
     let mut total_completions: i64 = 0;
 
-    let end_for_best = chrono::NaiveDate::parse_from_str(&latest, "%Y-%m-%d")
-        .unwrap_or(today_date)
-        .max(today_date);
+    // Never count future logs or an unfinished limit period.
+    let end_for_best = today_date;
     let mut d = tracking_start;
     while d <= end_for_best {
         let ds = d.format("%Y-%m-%d").to_string();
@@ -551,7 +574,7 @@ pub fn habits_streak(habit_id: i64, db: State<Database>) -> Result<HabitStreak, 
         } else {
             running = 0;
         }
-        d += chrono::Duration::days(1);
+        d += chrono::Duration::days(period_days);
     }
 
     if current_streak > best_streak {
@@ -559,8 +582,8 @@ pub fn habits_streak(habit_id: i64, db: State<Database>) -> Result<HabitStreak, 
     }
 
     // Completion rate: total completions / total days tracked, inclusive of today.
-    let total_days = (today_date - tracking_start).num_days().max(0) + 1;
-    let completion_rate = total_completions as f64 / total_days as f64;
+    let total_periods = ((today_date - tracking_start).num_days() / period_days + 1).max(1);
+    let completion_rate = (total_completions as f64 / total_periods as f64).min(1.0);
 
     Ok(HabitStreak {
         habit_id,
@@ -570,6 +593,10 @@ pub fn habits_streak(habit_id: i64, db: State<Database>) -> Result<HabitStreak, 
         completion_rate: (completion_rate * 100.0).round() / 100.0, // round to 2 decimals
     })
 }
+
+#[cfg(test)]
+#[path = "habit_streak_tests.rs"]
+mod streak_regressions;
 
 // ── Validation helpers ──
 
