@@ -247,3 +247,5 @@ Fix: Tauri dev mode has hot reload for frontend. For Rust changes, the app auto-
 ## License
 
 MIT License.
+#   C h r o n i N o t e s - v 4  
+ 
